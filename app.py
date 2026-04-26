@@ -238,7 +238,7 @@ def notify_tree_died():
         client = Client(account_sid, auth_token)
         msg = "🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪"
         for number in to_numbers:
-            client.messages.create(body=msg, from_=from_number, to=number)
+            client.messages.create(body=msg, from_=f'whatsapp:{from_number}', to=f'whatsapp:{number}')
         return jsonify({'success': True, 'notified': len(to_numbers)}), 200
     except Exception as e:
         print(f"[SMS] Error: {e}")
