@@ -219,6 +219,32 @@ def get_icloud_photos():
     return jsonify(result), 200
 
 
+@app.route('/api/notify/tree-died', methods=['POST'])
+def notify_tree_died():
+    account_sid  = os.environ.get('TWILIO_ACCOUNT_SID')
+    auth_token   = os.environ.get('TWILIO_AUTH_TOKEN')
+    from_number  = os.environ.get('TWILIO_FROM_NUMBER')
+    raw_numbers  = os.environ.get('ACCOUNTABILITY_NUMBERS', '')
+
+    if not all([account_sid, auth_token, from_number, raw_numbers]):
+        return jsonify({'error': 'SMS not configured'}), 503
+
+    to_numbers = [n.strip() for n in raw_numbers.split(',') if n.strip()]
+    if not to_numbers:
+        return jsonify({'error': 'No accountability numbers configured'}), 503
+
+    try:
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+        msg = "🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪"
+        for number in to_numbers:
+            client.messages.create(body=msg, from_=from_number, to=number)
+        return jsonify({'success': True, 'notified': len(to_numbers)}), 200
+    except Exception as e:
+        print(f"[SMS] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/icloud/clear', methods=['POST'])
 def clear_icloud_data():
     """Clear iCloud album configuration and cached photos"""
