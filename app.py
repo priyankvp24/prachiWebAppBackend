@@ -221,28 +221,37 @@ def get_icloud_photos():
 
 @app.route('/api/notify/tree-died', methods=['POST'])
 def notify_tree_died():
-    account_sid  = os.environ.get('TWILIO_ACCOUNT_SID')
-    auth_token   = os.environ.get('TWILIO_AUTH_TOKEN')
-    from_number  = os.environ.get('TWILIO_FROM_NUMBER')
-    raw_numbers  = os.environ.get('ACCOUNTABILITY_NUMBERS', '')
+    # ACCOUNTABILITY_TEAM format: phone:apikey,phone:apikey
+    # Each member opts in via CallMeBot (free) to get their apikey
+    raw_team = os.environ.get('ACCOUNTABILITY_TEAM', '')
+    if not raw_team:
+        return jsonify({'error': 'No accountability team configured'}), 503
 
-    if not all([account_sid, auth_token, from_number, raw_numbers]):
-        return jsonify({'error': 'SMS not configured'}), 503
+    team = []
+    for entry in raw_team.split(','):
+        parts = entry.strip().split(':')
+        if len(parts) == 2:
+            team.append({'phone': parts[0].strip(), 'apikey': parts[1].strip()})
 
-    to_numbers = [n.strip() for n in raw_numbers.split(',') if n.strip()]
-    if not to_numbers:
-        return jsonify({'error': 'No accountability numbers configured'}), 503
+    if not team:
+        return jsonify({'error': 'No valid team members configured'}), 503
 
-    try:
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
-        msg = "🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪"
-        for number in to_numbers:
-            client.messages.create(body=msg, from_=f'whatsapp:{from_number}', to=f'whatsapp:{number}')
-        return jsonify({'success': True, 'notified': len(to_numbers)}), 200
-    except Exception as e:
-        print(f"[SMS] Error: {e}")
-        return jsonify({'error': str(e)}), 500
+    import urllib.parse
+    msg = urllib.parse.quote("🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪")
+
+    sent = 0
+    for member in team:
+        url = f"https://api.callmebot.com/whatsapp.php?phone={member['phone']}&text={msg}&apikey={member['apikey']}"
+        try:
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                sent += 1
+            else:
+                print(f"[WhatsApp] Failed for {member['phone']}: {resp.status_code}")
+        except Exception as e:
+            print(f"[WhatsApp] Error for {member['phone']}: {e}")
+
+    return jsonify({'success': True, 'notified': sent}), 200
 
 
 @app.route('/api/icloud/clear', methods=['POST'])
