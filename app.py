@@ -227,18 +227,29 @@ def clear_icloud_data():
     db.session.commit()
     return jsonify({'success': True}), 200
 
+
+# ── Startup: runs under both gunicorn and python app.py ───────────────────────
+
+with app.app_context():
+    db.create_all()
+    if not iCloudAlbum.query.first():
+        db.session.add(iCloudAlbum(album_url=ICLOUD_ALBUM_URL))
+        db.session.commit()
+        print(f"[startup] Album configured: {ICLOUD_ALBUM_URL}")
+
+_sync_started = False
+_sync_lock = threading.Lock()
+
+@app.before_request
+def _start_sync_once():
+    global _sync_started
+    if not _sync_started:
+        with _sync_lock:
+            if not _sync_started:
+                _sync_started = True
+                threading.Thread(target=_background_sync, daemon=True).start()
+                print(f"[startup] Background sync started (every {SYNC_INTERVAL}s)")
+
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        if not iCloudAlbum.query.first():
-            db.session.add(iCloudAlbum(album_url=ICLOUD_ALBUM_URL))
-            db.session.commit()
-            print(f"[startup] Album configured: {ICLOUD_ALBUM_URL}")
-
-    # Only start the thread in the actual server process (not the Werkzeug reloader watcher)
-    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        t = threading.Thread(target=_background_sync, daemon=True)
-        t.start()
-        print(f"[startup] Background sync started (every {SYNC_INTERVAL}s)")
-
     app.run(debug=True, port=8080)
