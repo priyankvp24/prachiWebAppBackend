@@ -221,35 +221,30 @@ def get_icloud_photos():
 
 @app.route('/api/notify/tree-died', methods=['POST'])
 def notify_tree_died():
-    # ACCOUNTABILITY_TEAM format: phone:apikey,phone:apikey
-    # Each member opts in via CallMeBot (free) to get their apikey
-    raw_team = os.environ.get('ACCOUNTABILITY_TEAM', '')
-    if not raw_team:
-        return jsonify({'error': 'No accountability team configured'}), 503
+    instance_id = os.environ.get('GREEN_API_INSTANCE_ID')
+    api_token   = os.environ.get('GREEN_API_TOKEN')
+    raw_numbers = os.environ.get('ACCOUNTABILITY_NUMBERS', '')
 
-    team = []
-    for entry in raw_team.split(','):
-        parts = entry.strip().split(':')
-        if len(parts) == 2:
-            team.append({'phone': parts[0].strip(), 'apikey': parts[1].strip()})
+    if not all([instance_id, api_token, raw_numbers]):
+        return jsonify({'error': 'WhatsApp not configured'}), 503
 
-    if not team:
-        return jsonify({'error': 'No valid team members configured'}), 503
+    numbers = [n.strip().lstrip('+') for n in raw_numbers.split(',') if n.strip()]
+    if not numbers:
+        return jsonify({'error': 'No accountability numbers configured'}), 503
 
-    import urllib.parse
-    msg = urllib.parse.quote("🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪")
+    url = f"https://api.green-api.com/waInstance{instance_id}/sendMessage/{api_token}"
+    msg = "🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪"
 
     sent = 0
-    for member in team:
-        url = f"https://api.callmebot.com/whatsapp.php?phone={member['phone']}&text={msg}&apikey={member['apikey']}"
+    for number in numbers:
         try:
-            resp = requests.get(url, timeout=10)
+            resp = requests.post(url, json={"chatId": f"{number}@c.us", "message": msg}, timeout=10)
             if resp.status_code == 200:
                 sent += 1
             else:
-                print(f"[WhatsApp] Failed for {member['phone']}: {resp.status_code}")
+                print(f"[WhatsApp] Failed for {number}: {resp.status_code} {resp.text}")
         except Exception as e:
-            print(f"[WhatsApp] Error for {member['phone']}: {e}")
+            print(f"[WhatsApp] Error for {number}: {e}")
 
     return jsonify({'success': True, 'notified': sent}), 200
 
