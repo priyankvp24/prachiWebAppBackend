@@ -221,30 +221,29 @@ def get_icloud_photos():
 
 @app.route('/api/notify/tree-died', methods=['POST'])
 def notify_tree_died():
-    instance_id = os.environ.get('GREEN_API_INSTANCE_ID')
-    api_token   = os.environ.get('GREEN_API_TOKEN')
-    raw_numbers = os.environ.get('ACCOUNTABILITY_NUMBERS', '')
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    raw_ids   = os.environ.get('TELEGRAM_CHAT_IDS', '')
 
-    if not all([instance_id, api_token, raw_numbers]):
-        return jsonify({'error': 'WhatsApp not configured'}), 503
+    if not all([bot_token, raw_ids]):
+        return jsonify({'error': 'Telegram not configured'}), 503
 
-    numbers = [n.strip().lstrip('+') for n in raw_numbers.split(',') if n.strip()]
-    if not numbers:
-        return jsonify({'error': 'No accountability numbers configured'}), 503
+    chat_ids = [c.strip() for c in raw_ids.split(',') if c.strip()]
+    if not chat_ids:
+        return jsonify({'error': 'No chat IDs configured'}), 503
 
-    url = f"https://api.green-api.com/waInstance{instance_id}/sendMessage/{api_token}"
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     msg = "🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪"
 
     sent = 0
-    for number in numbers:
+    for chat_id in chat_ids:
         try:
-            resp = requests.post(url, json={"chatId": f"{number}@c.us", "message": msg}, timeout=10)
+            resp = requests.post(url, json={"chat_id": chat_id, "text": msg}, timeout=10)
             if resp.status_code == 200:
                 sent += 1
             else:
-                print(f"[WhatsApp] Failed for {number}: {resp.status_code} {resp.text}")
+                print(f"[Telegram] Failed for {chat_id}: {resp.status_code} {resp.text}")
         except Exception as e:
-            print(f"[WhatsApp] Error for {number}: {e}")
+            print(f"[Telegram] Error for {chat_id}: {e}")
 
     return jsonify({'success': True, 'notified': sent}), 200
 
