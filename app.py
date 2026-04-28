@@ -1,7 +1,9 @@
 import os
 import time
 import threading
+import smtplib
 import requests
+from email.mime.text import MIMEText
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
@@ -16,6 +18,37 @@ except ImportError:
     pass
 
 NOTIFY_PHONE = os.environ.get('NOTIFY_PHONE', '')
+SMTP_USER    = os.environ.get('SMTP_USER', '')    # your Gmail address
+SMTP_PASS    = os.environ.get('SMTP_PASS', '')    # Gmail App Password
+
+# Every major US carrier forwards @gateway emails to the phone as a text — free forever
+SMS_GATEWAYS = [
+    '{n}@tmomail.net',               # T-Mobile / Metro
+    '{n}@vtext.com',                 # Verizon
+    '{n}@txt.att.net',               # AT&T
+    '{n}@messaging.sprintpcs.com',   # Sprint (now T-Mobile)
+    '{n}@text.cricketwireless.net',  # Cricket
+    '{n}@myboostmobile.com',         # Boost
+]
+
+def _digits(phone):
+    """Strip everything except digits, remove leading country code 1."""
+    d = ''.join(c for c in phone if c.isdigit())
+    return d[1:] if d.startswith('1') and len(d) == 11 else d
+
+def send_sms(phone, message):
+    """Send message to all carrier gateways; only the right carrier delivers it."""
+    if not SMTP_USER or not SMTP_PASS:
+        raise RuntimeError('SMTP_USER / SMTP_PASS not configured')
+    n = _digits(phone)
+    recipients = [gw.format(n=n) for gw in SMS_GATEWAYS]
+    msg = MIMEText(message)
+    msg['From']    = SMTP_USER
+    msg['To']      = ', '.join(recipients)
+    msg['Subject'] = ''
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as s:
+        s.login(SMTP_USER, SMTP_PASS)
+        s.sendmail(SMTP_USER, recipients, msg.as_string())
 
 ICLOUD_ALBUM_URL = "https://www.icloud.com/sharedalbum/#B21G6XBub3ekWr"
 SYNC_INTERVAL = 30  # seconds
@@ -237,23 +270,15 @@ def notify_tree_died():
     data    = request.get_json(silent=True) or {}
     minutes = data.get('minutes', 0)
     msg     = (
-        f"🌳 Prachi's focus tree just died after {minutes} min "
-        f"— she gave up or left the app. Hold her accountable! 💪"
+        f"Prachi's focus tree just died after {minutes} min "
+        f"— she gave up or left the app. Hold her accountable!"
     )
 
     try:
-        resp = requests.post('https://textbelt.com/text', data={
-            'phone':   NOTIFY_PHONE,
-            'message': msg,
-            'key':     'textbelt',   # free tier: 1 SMS/day per IP
-        }, timeout=10)
-        result = resp.json()
-        if result.get('success'):
-            return jsonify({'success': True}), 200
-        print(f"[SMS] TextBelt error: {result}")
-        return jsonify({'error': result.get('error', 'SMS failed')}), 500
+        send_sms(NOTIFY_PHONE, msg)
+        return jsonify({'success': True}), 200
     except Exception as e:
-        print(f"[SMS] Request failed: {e}")
+        print(f"[SMS] Failed: {e}")
         return jsonify({'error': str(e)}), 500
 
 
