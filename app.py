@@ -21,15 +21,7 @@ NOTIFY_PHONE = os.environ.get('NOTIFY_PHONE', '')
 SMTP_USER    = os.environ.get('SMTP_USER', '')    # your Gmail address
 SMTP_PASS    = os.environ.get('SMTP_PASS', '')    # Gmail App Password
 
-# Every major US carrier forwards @gateway emails to the phone as a text — free forever
-SMS_GATEWAYS = [
-    '{n}@tmomail.net',               # T-Mobile / Metro
-    '{n}@vtext.com',                 # Verizon
-    '{n}@txt.att.net',               # AT&T
-    '{n}@messaging.sprintpcs.com',   # Sprint (now T-Mobile)
-    '{n}@text.cricketwireless.net',  # Cricket
-    '{n}@myboostmobile.com',         # Boost
-]
+SMS_GATEWAY = '{n}@tmomail.net'  # T-Mobile
 
 def _digits(phone):
     """Strip everything except digits, remove leading country code 1."""
@@ -37,18 +29,16 @@ def _digits(phone):
     return d[1:] if d.startswith('1') and len(d) == 11 else d
 
 def send_sms(phone, message):
-    """Send message to all carrier gateways; only the right carrier delivers it."""
     if not SMTP_USER or not SMTP_PASS:
         raise RuntimeError('SMTP_USER / SMTP_PASS not configured')
-    n = _digits(phone)
-    recipients = [gw.format(n=n) for gw in SMS_GATEWAYS]
+    recipient = SMS_GATEWAY.format(n=_digits(phone))
     msg = MIMEText(message)
     msg['From']    = SMTP_USER
-    msg['To']      = ', '.join(recipients)
+    msg['To']      = recipient
     msg['Subject'] = ''
     with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as s:
         s.login(SMTP_USER, SMTP_PASS)
-        s.sendmail(SMTP_USER, recipients, msg.as_string())
+        s.sendmail(SMTP_USER, [recipient], msg.as_string())
 
 ICLOUD_ALBUM_URL = "https://www.icloud.com/sharedalbum/#B21G6XBub3ekWr"
 SYNC_INTERVAL = 30  # seconds
