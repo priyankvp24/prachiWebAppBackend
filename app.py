@@ -1,11 +1,21 @@
 import os
 import time
 import threading
+import requests
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from icloud_fetcher import fetch_icloud_photos_selenium, get_local_photos
+
+# Load .env in development (no-op if python-dotenv is not installed or file absent)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+NOTIFY_PHONE = os.environ.get('NOTIFY_PHONE', '')
 
 ICLOUD_ALBUM_URL = "https://www.icloud.com/sharedalbum/#B21G6XBub3ekWr"
 SYNC_INTERVAL = 30  # seconds
@@ -221,31 +231,30 @@ def get_icloud_photos():
 
 @app.route('/api/notify/tree-died', methods=['POST'])
 def notify_tree_died():
-    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
-    raw_ids   = os.environ.get('TELEGRAM_CHAT_IDS', '')
+    if not NOTIFY_PHONE:
+        return jsonify({'error': 'NOTIFY_PHONE not configured'}), 503
 
-    if not all([bot_token, raw_ids]):
-        return jsonify({'error': 'Telegram not configured'}), 503
+    data    = request.get_json(silent=True) or {}
+    minutes = data.get('minutes', 0)
+    msg     = (
+        f"🌳 Prachi's focus tree just died after {minutes} min "
+        f"— she gave up or left the app. Hold her accountable! 💪"
+    )
 
-    chat_ids = [c.strip() for c in raw_ids.split(',') if c.strip()]
-    if not chat_ids:
-        return jsonify({'error': 'No chat IDs configured'}), 503
-
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    msg = "🌳 Prachi's focus tree just died — she gave up or left the app. Hold her accountable! 💪"
-
-    sent = 0
-    for chat_id in chat_ids:
-        try:
-            resp = requests.post(url, json={"chat_id": chat_id, "text": msg}, timeout=10)
-            if resp.status_code == 200:
-                sent += 1
-            else:
-                print(f"[Telegram] Failed for {chat_id}: {resp.status_code} {resp.text}")
-        except Exception as e:
-            print(f"[Telegram] Error for {chat_id}: {e}")
-
-    return jsonify({'success': True, 'notified': sent}), 200
+    try:
+        resp = requests.post('https://textbelt.com/text', data={
+            'phone':   NOTIFY_PHONE,
+            'message': msg,
+            'key':     'textbelt',   # free tier: 1 SMS/day per IP
+        }, timeout=10)
+        result = resp.json()
+        if result.get('success'):
+            return jsonify({'success': True}), 200
+        print(f"[SMS] TextBelt error: {result}")
+        return jsonify({'error': result.get('error', 'SMS failed')}), 500
+    except Exception as e:
+        print(f"[SMS] Request failed: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/icloud/clear', methods=['POST'])
