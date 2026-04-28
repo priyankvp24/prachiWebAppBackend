@@ -28,6 +28,11 @@ def _digits(phone):
     d = ''.join(c for c in phone if c.isdigit())
     return d[1:] if d.startswith('1') and len(d) == 11 else d
 
+def ord_suffix(n):
+    if 11 <= n % 100 <= 13:
+        return 'th'
+    return {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+
 def send_sms(phone, message):
     if not SMTP_USER or not SMTP_PASS:
         raise RuntimeError('SMTP_USER / SMTP_PASS not configured')
@@ -259,9 +264,33 @@ def notify_tree_died():
 
     data    = request.get_json(silent=True) or {}
     minutes = data.get('minutes', 0)
+    ordinal = data.get('ordinal', 1)
+    n       = f"{ordinal}{ord_suffix(ordinal)}"
     msg     = (
-        f"Prachi's focus tree just died after {minutes} min "
-        f"— she gave up or left the app. Hold her accountable!"
+        f"Prachi's {n} tree of the day just died after {minutes} min "
+        f"— she gave up or left. Hold her accountable!"
+    )
+
+    try:
+        send_sms(NOTIFY_PHONE, msg)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print(f"[SMS] Failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/notify/tree-planted', methods=['POST'])
+def notify_tree_planted():
+    if not NOTIFY_PHONE:
+        return jsonify({'error': 'NOTIFY_PHONE not configured'}), 503
+
+    data    = request.get_json(silent=True) or {}
+    minutes = data.get('minutes', 0)
+    ordinal = data.get('ordinal', 1)
+    n       = f"{ordinal}{ord_suffix(ordinal)}"
+    msg     = (
+        f"TREE PLANTED! Prachi just grew her {n} tree of the day! "
+        f"She locked in for {minutes} min straight. LET'S GO!!"
     )
 
     try:
