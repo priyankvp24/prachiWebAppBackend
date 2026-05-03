@@ -10,16 +10,9 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from icloud_fetcher import fetch_icloud_photos_selenium, get_local_photos
 
-# Load .env in development (no-op if python-dotenv is not installed or file absent)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-NOTIFY_PHONE = os.environ.get('NOTIFY_PHONE', '')
-SMTP_USER    = os.environ.get('SMTP_USER', '')    # your Gmail address
-SMTP_PASS    = os.environ.get('SMTP_PASS', '')    # Gmail App Password
+NOTIFY_PHONE = '+19789739121'
+SMTP_USER    = 'priyankvpatel24@gmail.com'
+SMTP_PASS    = 'ydhmdsdjtxiqtbkl'
 
 SMS_GATEWAY = '{n}@tmomail.net'  # T-Mobile
 
