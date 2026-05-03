@@ -34,7 +34,9 @@ def send_sms(phone, message):
     msg['From']    = SMTP_USER
     msg['To']      = recipient
     msg['Subject'] = ''
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as s:
+    with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as s:
+        s.ehlo()
+        s.starttls()
         s.login(SMTP_USER, SMTP_PASS)
         s.sendmail(SMTP_USER, [recipient], msg.as_string())
 
